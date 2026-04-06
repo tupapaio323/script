@@ -16,7 +16,6 @@ local getPlayerLevel
 
 local autoFarm = false
 local autoStand = true
-local walkSpeedEnabled = false
 local autoPrestige = false
 local autoStats = false
 local guiExpanded = true
@@ -35,10 +34,7 @@ local setDebug = function() end
 local debugMessage = "Debug: listo"
 local lastDebugRawMessage = ""
 local debugPinnedUntil = 0
-local lastAppliedSpeed = nil
-local speedSuppressed = false
 
-local customSpeed = 350
 local selectedStat = "Strength"
 local statAmountValue = 1
 local MOVE_SPEED = 42
@@ -119,7 +115,7 @@ local palette = {
 local function clampWalkSpeed(value)
     local parsed = tonumber(value)
     if not parsed then
-        return customSpeed
+        return 16
     end
 
     return math.clamp(math.floor(parsed + 0.5), 16, 500)
@@ -282,6 +278,24 @@ local function getDescendantByPath(root, pathParts)
     return current
 end
 
+local function findNamedDescendant(root, targetName)
+    if not root then
+        return nil
+    end
+
+    if root.Name == targetName then
+        return root
+    end
+
+    for _, descendant in ipairs(root:GetDescendants()) do
+        if descendant.Name == targetName then
+            return descendant
+        end
+    end
+
+    return nil
+end
+
 local function clickGuiButton(button)
     if not button then
         return false
@@ -311,13 +325,16 @@ local function getStatsUiRoot()
 end
 
 local function getSkillPointsAmount(statsRoot)
-    local amountNode = statsRoot and statsRoot:FindFirstChild("Amount")
+    local amountNode = findNamedDescendant(statsRoot, "aSkill Points")
+        or findNamedDescendant(statsRoot, "Skill Points")
+        or findNamedDescendant(statsRoot, "Amount")
     local amount = readLevelFromInstance(amountNode)
     if amount then
         return amount
     end
 
-    for _, descendant in ipairs((statsRoot and statsRoot:GetDescendants()) or {}) do
+    local searchRoot = statsRoot and statsRoot.Parent and statsRoot.Parent.Parent or statsRoot
+    for _, descendant in ipairs((searchRoot and searchRoot:GetDescendants()) or {}) do
         if descendant.Name:lower():find("skill") or descendant.Name:lower():find("point") then
             local value = readLevelFromInstance(descendant)
             if value then
@@ -346,7 +363,7 @@ local function applyAutoStats()
         return false
     end
 
-    local amountBox = statsRoot:FindFirstChild("Amount")
+    local amountBox = findNamedDescendant(statsRoot, "Amount")
     if amountBox then
         if amountBox:IsA("TextBox") or amountBox:IsA("TextLabel") then
             amountBox.Text = tostring(statAmountValue)
@@ -357,8 +374,10 @@ local function applyAutoStats()
         end
     end
 
-    local targetButton = statsRoot:FindFirstChild(selectedStat)
-    local addStatsButton = statsRoot:FindFirstChild("AddStats") or (statsRoot.Parent and statsRoot.Parent:FindFirstChild("AddStats"))
+    local targetButton = findNamedDescendant(statsRoot, selectedStat)
+    local addStatsButton = findNamedDescendant(statsRoot, "AddStats")
+        or findNamedDescendant(statsRoot.Parent, "AddStats")
+        or findNamedDescendant(statsRoot.Parent and statsRoot.Parent.Parent, "AddStats")
 
     if not targetButton then
         setDebug("auto stats: boton stat no encontrado " .. tostring(selectedStat), 2)
@@ -475,46 +494,8 @@ local function stopMomentum()
 end
 
 local function ensureWalkSpeed()
-    local currentCharacter = player.Character
-    local currentHumanoid = currentCharacter and currentCharacter:FindFirstChild("Humanoid")
-    if not currentHumanoid then
-        lastAppliedSpeed = nil
-        speedSuppressed = false
-        return
-    end
-
-    local currentSpeed = currentHumanoid.WalkSpeed
-
-    if not walkSpeedEnabled then
-        if lastAppliedSpeed and math.abs(currentSpeed - lastAppliedSpeed) < 0.05 then
-            currentHumanoid.WalkSpeed = DEFAULT_WALKSPEED
-        end
-        lastAppliedSpeed = nil
-        speedSuppressed = false
-        return
-    end
-
-    if not lastAppliedSpeed and currentSpeed < DEFAULT_WALKSPEED then
-        speedSuppressed = true
-    end
-
-    local loweredByExternalSystem = lastAppliedSpeed and currentSpeed < lastAppliedSpeed and currentSpeed < customSpeed
-    if loweredByExternalSystem then
-        speedSuppressed = true
-    end
-
-    if speedSuppressed then
-        if currentSpeed >= DEFAULT_WALKSPEED then
-            speedSuppressed = false
-        else
-            lastAppliedSpeed = currentSpeed
-            return
-        end
-    end
-
-    if math.abs(currentSpeed - customSpeed) > 0.05 then
-        currentHumanoid.WalkSpeed = customSpeed
-        lastAppliedSpeed = customSpeed
+    if humanoid and humanoid.WalkSpeed ~= DEFAULT_WALKSPEED then
+        humanoid.WalkSpeed = DEFAULT_WALKSPEED
     end
 end
 
@@ -664,9 +645,7 @@ player.CharacterAdded:Connect(function(char)
     setDebug("personaje reaparecio", 2)
 
     if autoStand then
-        task.spawn(function()
-            summonStandIfNeeded()
-        end)
+        summonStandIfNeeded(char)
     end
 
     if autoFarm and respawnCheckpoint and humanoidRootPart then
@@ -703,23 +682,30 @@ local function holdKeyFacing(keyCode, holdTime, targetRoot)
     VirtualInputManager:SendKeyEvent(false, keyCode, false, game)
 end
 
-local function summonStandIfNeeded()
+local function summonStandIfNeeded(expectedCharacter)
     if not autoStand then
         return
     end
 
-    setDebug("auto stand: esperando respawn listo", 2)
-    task.wait(STAND_SUMMON_DELAY)
+    task.delay(STAND_SUMMON_DELAY, function()
+        if not autoStand or (expectedCharacter and player.Character ~= expectedCharacter) then
+            return
+        end
 
-    if not autoStand then
-        return
-    end
+        setDebug("auto stand: presionando Q", 2)
+        VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Q, false, game)
+        task.wait(0.1)
+        VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Q, false, game)
 
-    setDebug("auto stand: presionando Q", 2)
-    VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Q, false, game)
-    task.wait(0.1)
-    VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Q, false, game)
-    setDebug("auto stand: Q enviada", 2)
+        task.wait(0.6)
+        if autoStand and (not expectedCharacter or player.Character == expectedCharacter) then
+            VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Q, false, game)
+            task.wait(0.1)
+            VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Q, false, game)
+        end
+
+        setDebug("auto stand: Q enviada", 2)
+    end)
 end
 
 local function jumpIfStuck()
@@ -1625,29 +1611,16 @@ mainFarmLabel.TextSize = 16
 mainFarmLabel.TextXAlignment = Enum.TextXAlignment.Left
 mainFarmLabel.Parent = content
 
-local utilityLabel = Instance.new("TextLabel")
-utilityLabel.Size = UDim2.new(1, -8, 0, 20)
-utilityLabel.Position = UDim2.new(0, 0, 0, 236)
-utilityLabel.BackgroundTransparency = 1
-utilityLabel.Font = Enum.Font.GothamBold
-utilityLabel.Text = "Utility"
-utilityLabel.TextColor3 = palette.text
-utilityLabel.TextSize = 16
-utilityLabel.TextXAlignment = Enum.TextXAlignment.Left
-utilityLabel.Parent = content
-utilityLabel.Visible = false
-
-local miscLabel = Instance.new("TextLabel")
-miscLabel.Size = UDim2.new(1, -8, 0, 20)
-miscLabel.Position = UDim2.new(0, 0, 0, 332)
-miscLabel.BackgroundTransparency = 1
-miscLabel.Font = Enum.Font.GothamBold
-miscLabel.Text = "Diagnostics"
-miscLabel.TextColor3 = palette.text
-miscLabel.TextSize = 16
-miscLabel.TextXAlignment = Enum.TextXAlignment.Left
-miscLabel.Parent = content
-miscLabel.Visible = false
+local playerLabel = Instance.new("TextLabel")
+playerLabel.Size = UDim2.new(1, -8, 0, 20)
+playerLabel.Position = UDim2.new(0, 0, 0, 236)
+playerLabel.BackgroundTransparency = 1
+playerLabel.Font = Enum.Font.GothamBold
+playerLabel.Text = "Player"
+playerLabel.TextColor3 = palette.text
+playerLabel.TextSize = 16
+playerLabel.TextXAlignment = Enum.TextXAlignment.Left
+playerLabel.Parent = content
 
 local autoBtn = Instance.new("TextButton")
 autoBtn.Size = UDim2.new(1, -24, 0, 42)
@@ -1677,23 +1650,9 @@ local autoStandCorner = Instance.new("UICorner")
 autoStandCorner.CornerRadius = UDim.new(0, 10)
 autoStandCorner.Parent = autoStandBtn
 
-local setSpeedBtn = Instance.new("TextButton")
-setSpeedBtn.Size = UDim2.new(1, -24, 0, 38)
-setSpeedBtn.Position = UDim2.new(0, 0, 0, 220)
-setSpeedBtn.BorderSizePixel = 0
-setSpeedBtn.Font = Enum.Font.GothamBold
-setSpeedBtn.TextColor3 = palette.text
-setSpeedBtn.TextSize = 14
-setSpeedBtn.BackgroundColor3 = palette.surface
-setSpeedBtn.Parent = content
-
-local setSpeedCorner = Instance.new("UICorner")
-setSpeedCorner.CornerRadius = UDim.new(0, 10)
-setSpeedCorner.Parent = setSpeedBtn
-
 local autoPrestigeBtn = Instance.new("TextButton")
 autoPrestigeBtn.Size = UDim2.new(1, -24, 0, 38)
-autoPrestigeBtn.Position = UDim2.new(0, 0, 0, 316)
+autoPrestigeBtn.Position = UDim2.new(0, 0, 0, 220)
 autoPrestigeBtn.BorderSizePixel = 0
 autoPrestigeBtn.Font = Enum.Font.GothamBold
 autoPrestigeBtn.TextColor3 = palette.text
@@ -1707,7 +1666,7 @@ autoPrestigeCorner.Parent = autoPrestigeBtn
 
 local autoStatsBtn = Instance.new("TextButton")
 autoStatsBtn.Size = UDim2.new(1, -24, 0, 38)
-autoStatsBtn.Position = UDim2.new(0, 0, 0, 364)
+autoStatsBtn.Position = UDim2.new(0, 0, 0, 268)
 autoStatsBtn.BorderSizePixel = 0
 autoStatsBtn.Font = Enum.Font.GothamBold
 autoStatsBtn.TextColor3 = palette.text
@@ -1721,7 +1680,7 @@ autoStatsCorner.Parent = autoStatsBtn
 
 local statModeBtn = Instance.new("TextButton")
 statModeBtn.Size = UDim2.new(1, -24, 0, 36)
-statModeBtn.Position = UDim2.new(0, 0, 0, 412)
+statModeBtn.Position = UDim2.new(0, 0, 0, 316)
 statModeBtn.BorderSizePixel = 0
 statModeBtn.Font = Enum.Font.GothamBold
 statModeBtn.TextColor3 = palette.text
@@ -1735,7 +1694,7 @@ statModeCorner.Parent = statModeBtn
 
 local statAmountBox = Instance.new("TextBox")
 statAmountBox.Size = UDim2.new(1, -24, 0, 36)
-statAmountBox.Position = UDim2.new(0, 0, 0, 460)
+statAmountBox.Position = UDim2.new(0, 0, 0, 364)
 statAmountBox.BackgroundColor3 = palette.surfaceSoft
 statAmountBox.BorderSizePixel = 0
 statAmountBox.ClearTextOnFocus = false
@@ -1753,7 +1712,7 @@ statAmountCorner.Parent = statAmountBox
 
 local rejoinBtn = Instance.new("TextButton")
 rejoinBtn.Size = UDim2.new(1, -24, 0, 38)
-rejoinBtn.Position = UDim2.new(0, 0, 0, 508)
+rejoinBtn.Position = UDim2.new(0, 0, 0, 460)
 rejoinBtn.BorderSizePixel = 0
 rejoinBtn.Font = Enum.Font.GothamBold
 rejoinBtn.Text = "Rejoin"
@@ -1768,7 +1727,7 @@ rejoinCorner.Parent = rejoinBtn
 
 local farmModeBtn = Instance.new("TextButton")
 farmModeBtn.Size = UDim2.new(1, -24, 0, 38)
-farmModeBtn.Position = UDim2.new(0, 0, 0, 556)
+farmModeBtn.Position = UDim2.new(0, 0, 0, 172)
 farmModeBtn.BorderSizePixel = 0
 farmModeBtn.Font = Enum.Font.GothamBold
 farmModeBtn.TextColor3 = palette.text
@@ -1780,30 +1739,13 @@ local farmModeCorner = Instance.new("UICorner")
 farmModeCorner.CornerRadius = UDim.new(0, 10)
 farmModeCorner.Parent = farmModeBtn
 
-local walkSpeedBox = Instance.new("TextBox")
-walkSpeedBox.Size = UDim2.new(1, -24, 0, 36)
-walkSpeedBox.Position = UDim2.new(0, 0, 0, 604)
-walkSpeedBox.BackgroundColor3 = palette.surfaceSoft
-walkSpeedBox.BorderSizePixel = 0
-walkSpeedBox.ClearTextOnFocus = false
-walkSpeedBox.Font = Enum.Font.Gotham
-walkSpeedBox.PlaceholderText = "Set Speed Value"
-walkSpeedBox.Text = tostring(customSpeed)
-walkSpeedBox.TextColor3 = palette.text
-walkSpeedBox.PlaceholderColor3 = palette.muted
-walkSpeedBox.TextSize = 14
-walkSpeedBox.Parent = content
-
-local walkSpeedCorner = Instance.new("UICorner")
-walkSpeedCorner.CornerRadius = UDim.new(0, 10)
-walkSpeedCorner.Parent = walkSpeedBox
 
 local infoLabel = Instance.new("TextLabel")
 infoLabel.Size = UDim2.new(1, -24, 0, 34)
-infoLabel.Position = UDim2.new(0, 0, 0, 648)
+infoLabel.Position = UDim2.new(0, 0, 0, 556)
 infoLabel.BackgroundTransparency = 1
 infoLabel.Font = Enum.Font.Gotham
-infoLabel.Text = "La GUI muestra tu nivel y quest automaticos. Puedes editar el WalkSpeed para caminar mas rapido."
+infoLabel.Text = "La GUI muestra el progreso del farm y las opciones del jugador."
 infoLabel.TextColor3 = palette.muted
 infoLabel.TextSize = 11
 infoLabel.TextWrapped = true
@@ -1813,7 +1755,7 @@ infoLabel.Parent = content
 
 local debugLabel = Instance.new("TextLabel")
 debugLabel.Size = UDim2.new(1, -24, 0, 42)
-debugLabel.Position = UDim2.new(0, 0, 0, 690)
+debugLabel.Position = UDim2.new(0, 0, 0, 592)
 debugLabel.BackgroundTransparency = 1
 debugLabel.Font = Enum.Font.Code
 debugLabel.Text = debugMessage
@@ -1860,20 +1802,17 @@ local function setExpanded(expanded)
     mainFarmLabel.Visible = expanded
     autoBtn.Visible = expanded
     autoStandBtn.Visible = expanded
-    setSpeedBtn.Visible = expanded
     autoPrestigeBtn.Visible = expanded
     autoStatsBtn.Visible = expanded
     statModeBtn.Visible = expanded
     statAmountBox.Visible = expanded
-    utilityLabel.Visible = false
+    playerLabel.Visible = expanded
     rejoinBtn.Visible = expanded
     farmModeBtn.Visible = expanded
-    walkSpeedBox.Visible = expanded
-    miscLabel.Visible = false
     infoLabel.Visible = expanded
     debugLabel.Visible = expanded
     sidebar.Visible = expanded
-    frame.Size = expanded and UDim2.new(0, 560, 0, 760) or UDim2.new(0, 560, 0, 44)
+    frame.Size = expanded and UDim2.new(0, 560, 0, 630) or UDim2.new(0, 560, 0, 44)
     minimizeBtn.Text = expanded and "-" or "+"
 end
 
@@ -1912,7 +1851,6 @@ local function updateStatus(force)
     local detected = #collectNpcTargets(config.npcName)
     local questState = takenQuestKey == config.questName and "Quest tomada" or "Quest pendiente"
     local deathState = skipQuestAfterDeath and "Respawn: directo a NPC" or "Respawn: tomar quest"
-    local speedState = "Set Speed: " .. (walkSpeedEnabled and "ON" or "OFF") .. " | Value: " .. tostring(customSpeed)
     local standState = autoStand and "Auto Stand: ON" or "Auto Stand: OFF"
     local prestigeState = autoPrestige and "Auto Prestige: ON" or "Auto Prestige: OFF"
     local statsState = autoStats and ("Auto Stats: ON | " .. selectedStat .. " x" .. tostring(statAmountValue)) or "Auto Stats: OFF"
@@ -1926,7 +1864,7 @@ local function updateStatus(force)
     end
 
     statusLabel.Text = string.format(
-        "Nivel actual: %d\nQuest activa: %s\nNPC: %s | Detectados: %d/%d\n%s | %s | %s\n%s | %s | %s",
+        "Nivel actual: %d\nQuest activa: %s\nNPC: %s | Detectados: %d/%d\n%s | %s\n%s | %s | %s",
         level,
         config.questName,
         config.npcName,
@@ -1934,7 +1872,6 @@ local function updateStatus(force)
         config.expectedCount,
         questState,
         deathState,
-        speedState,
         standState,
         prestigeState,
         statsState,
@@ -1949,8 +1886,6 @@ local function updateStatus(force)
     autoBtn.BackgroundColor3 = autoFarm and palette.danger or palette.accent
     autoStandBtn.Text = autoStand and "Auto Stand: ON" or "Auto Stand: OFF"
     autoStandBtn.BackgroundColor3 = autoStand and palette.accent or Color3.fromRGB(72, 84, 110)
-    setSpeedBtn.Text = (walkSpeedEnabled and "Set Speed: ON" or "Set Speed: OFF") .. " | " .. tostring(customSpeed)
-    setSpeedBtn.BackgroundColor3 = walkSpeedEnabled and palette.accent or palette.surface
     autoPrestigeBtn.Text = autoPrestige and "Auto Prestige: ON" or "Auto Prestige: OFF"
     autoPrestigeBtn.BackgroundColor3 = autoPrestige and palette.accent or palette.surface
     autoStatsBtn.Text = autoStats and "Auto Stats: ON" or "Auto Stats: OFF"
@@ -1963,7 +1898,6 @@ autoBtn.MouseButton1Click:Connect(function()
     autoFarm = not autoFarm
     syncAutoFarmState()
     stopMomentum()
-    ensureWalkSpeed()
     updateStatus(true)
 end)
 
@@ -1974,12 +1908,6 @@ autoStandBtn.MouseButton1Click:Connect(function()
             summonStandIfNeeded()
         end)
     end
-    updateStatus(true)
-end)
-
-setSpeedBtn.MouseButton1Click:Connect(function()
-    walkSpeedEnabled = not walkSpeedEnabled
-    ensureWalkSpeed()
     updateStatus(true)
 end)
 
@@ -2007,13 +1935,6 @@ statModeBtn.MouseButton1Click:Connect(function()
         nextIndex = 1
     end
     selectedStat = statOrder[nextIndex]
-    updateStatus(true)
-end)
-
-walkSpeedBox.FocusLost:Connect(function()
-    customSpeed = clampWalkSpeed(walkSpeedBox.Text)
-    walkSpeedBox.Text = tostring(customSpeed)
-    ensureWalkSpeed()
     updateStatus(true)
 end)
 
@@ -2051,7 +1972,6 @@ end)
 
 task.spawn(function()
     while gui.Parent do
-        ensureWalkSpeed()
         if autoPrestige then
             tryAutoPrestige()
         end
@@ -2091,12 +2011,6 @@ end)
 RunService.Stepped:Connect(function()
     if character then
         syncAutoFarmState()
-    end
-end)
-
-RunService.Heartbeat:Connect(function()
-    if walkSpeedEnabled then
-        ensureWalkSpeed()
     end
 end)
 
