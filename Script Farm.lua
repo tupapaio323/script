@@ -611,6 +611,8 @@ local function restoreCheckpoint()
         task.wait(CHECKPOINT_RESTORE_DELAY)
     end
 
+    syncAutoFarmState()
+    ensureWalkSpeed()
     isRestoringCheckpoint = false
     setDebug("personaje restaurado | retorno al checkpoint completado")
 end
@@ -1633,6 +1635,7 @@ utilityLabel.TextColor3 = palette.text
 utilityLabel.TextSize = 16
 utilityLabel.TextXAlignment = Enum.TextXAlignment.Left
 utilityLabel.Parent = content
+utilityLabel.Visible = false
 
 local miscLabel = Instance.new("TextLabel")
 miscLabel.Size = UDim2.new(1, -8, 0, 20)
@@ -1644,10 +1647,11 @@ miscLabel.TextColor3 = palette.text
 miscLabel.TextSize = 16
 miscLabel.TextXAlignment = Enum.TextXAlignment.Left
 miscLabel.Parent = content
+miscLabel.Visible = false
 
 local autoBtn = Instance.new("TextButton")
 autoBtn.Size = UDim2.new(1, -24, 0, 42)
-autoBtn.Position = UDim2.new(0, 0, 0, 112)
+autoBtn.Position = UDim2.new(0, 0, 0, 124)
 autoBtn.BorderSizePixel = 0
 autoBtn.Font = Enum.Font.GothamBold
 autoBtn.TextColor3 = palette.text
@@ -1661,7 +1665,7 @@ autoCorner.Parent = autoBtn
 
 local autoStandBtn = Instance.new("TextButton")
 autoStandBtn.Size = UDim2.new(1, -24, 0, 38)
-autoStandBtn.Position = UDim2.new(0, 0, 0, 162)
+autoStandBtn.Position = UDim2.new(0, 0, 0, 172)
 autoStandBtn.BorderSizePixel = 0
 autoStandBtn.Font = Enum.Font.GothamBold
 autoStandBtn.TextColor3 = palette.text
@@ -1675,7 +1679,7 @@ autoStandCorner.Parent = autoStandBtn
 
 local setSpeedBtn = Instance.new("TextButton")
 setSpeedBtn.Size = UDim2.new(1, -24, 0, 38)
-setSpeedBtn.Position = UDim2.new(0, 0, 0, 210)
+setSpeedBtn.Position = UDim2.new(0, 0, 0, 220)
 setSpeedBtn.BorderSizePixel = 0
 setSpeedBtn.Font = Enum.Font.GothamBold
 setSpeedBtn.TextColor3 = palette.text
@@ -1689,7 +1693,7 @@ setSpeedCorner.Parent = setSpeedBtn
 
 local autoPrestigeBtn = Instance.new("TextButton")
 autoPrestigeBtn.Size = UDim2.new(1, -24, 0, 38)
-autoPrestigeBtn.Position = UDim2.new(0, 0, 0, 258)
+autoPrestigeBtn.Position = UDim2.new(0, 0, 0, 316)
 autoPrestigeBtn.BorderSizePixel = 0
 autoPrestigeBtn.Font = Enum.Font.GothamBold
 autoPrestigeBtn.TextColor3 = palette.text
@@ -1703,7 +1707,7 @@ autoPrestigeCorner.Parent = autoPrestigeBtn
 
 local autoStatsBtn = Instance.new("TextButton")
 autoStatsBtn.Size = UDim2.new(1, -24, 0, 38)
-autoStatsBtn.Position = UDim2.new(0, 0, 0, 306)
+autoStatsBtn.Position = UDim2.new(0, 0, 0, 364)
 autoStatsBtn.BorderSizePixel = 0
 autoStatsBtn.Font = Enum.Font.GothamBold
 autoStatsBtn.TextColor3 = palette.text
@@ -1717,7 +1721,7 @@ autoStatsCorner.Parent = autoStatsBtn
 
 local statModeBtn = Instance.new("TextButton")
 statModeBtn.Size = UDim2.new(1, -24, 0, 36)
-statModeBtn.Position = UDim2.new(0, 0, 0, 354)
+statModeBtn.Position = UDim2.new(0, 0, 0, 412)
 statModeBtn.BorderSizePixel = 0
 statModeBtn.Font = Enum.Font.GothamBold
 statModeBtn.TextColor3 = palette.text
@@ -1731,7 +1735,7 @@ statModeCorner.Parent = statModeBtn
 
 local statAmountBox = Instance.new("TextBox")
 statAmountBox.Size = UDim2.new(1, -24, 0, 36)
-statAmountBox.Position = UDim2.new(0, 0, 0, 402)
+statAmountBox.Position = UDim2.new(0, 0, 0, 460)
 statAmountBox.BackgroundColor3 = palette.surfaceSoft
 statAmountBox.BorderSizePixel = 0
 statAmountBox.ClearTextOnFocus = false
@@ -1749,7 +1753,7 @@ statAmountCorner.Parent = statAmountBox
 
 local rejoinBtn = Instance.new("TextButton")
 rejoinBtn.Size = UDim2.new(1, -24, 0, 38)
-rejoinBtn.Position = UDim2.new(0, 0, 0, 450)
+rejoinBtn.Position = UDim2.new(0, 0, 0, 508)
 rejoinBtn.BorderSizePixel = 0
 rejoinBtn.Font = Enum.Font.GothamBold
 rejoinBtn.Text = "Rejoin"
@@ -1764,7 +1768,7 @@ rejoinCorner.Parent = rejoinBtn
 
 local farmModeBtn = Instance.new("TextButton")
 farmModeBtn.Size = UDim2.new(1, -24, 0, 38)
-farmModeBtn.Position = UDim2.new(0, 0, 0, 498)
+farmModeBtn.Position = UDim2.new(0, 0, 0, 556)
 farmModeBtn.BorderSizePixel = 0
 farmModeBtn.Font = Enum.Font.GothamBold
 farmModeBtn.TextColor3 = palette.text
@@ -1778,7 +1782,7 @@ farmModeCorner.Parent = farmModeBtn
 
 local walkSpeedBox = Instance.new("TextBox")
 walkSpeedBox.Size = UDim2.new(1, -24, 0, 36)
-walkSpeedBox.Position = UDim2.new(0, 0, 0, 546)
+walkSpeedBox.Position = UDim2.new(0, 0, 0, 604)
 walkSpeedBox.BackgroundColor3 = palette.surfaceSoft
 walkSpeedBox.BorderSizePixel = 0
 walkSpeedBox.ClearTextOnFocus = false
@@ -1796,7 +1800,7 @@ walkSpeedCorner.Parent = walkSpeedBox
 
 local infoLabel = Instance.new("TextLabel")
 infoLabel.Size = UDim2.new(1, -24, 0, 34)
-infoLabel.Position = UDim2.new(0, 0, 0, 588)
+infoLabel.Position = UDim2.new(0, 0, 0, 648)
 infoLabel.BackgroundTransparency = 1
 infoLabel.Font = Enum.Font.Gotham
 infoLabel.Text = "La GUI muestra tu nivel y quest automaticos. Puedes editar el WalkSpeed para caminar mas rapido."
@@ -1809,7 +1813,7 @@ infoLabel.Parent = content
 
 local debugLabel = Instance.new("TextLabel")
 debugLabel.Size = UDim2.new(1, -24, 0, 42)
-debugLabel.Position = UDim2.new(0, 0, 0, 624)
+debugLabel.Position = UDim2.new(0, 0, 0, 690)
 debugLabel.BackgroundTransparency = 1
 debugLabel.Font = Enum.Font.Code
 debugLabel.Text = debugMessage
@@ -1861,15 +1865,15 @@ local function setExpanded(expanded)
     autoStatsBtn.Visible = expanded
     statModeBtn.Visible = expanded
     statAmountBox.Visible = expanded
-    utilityLabel.Visible = expanded
+    utilityLabel.Visible = false
     rejoinBtn.Visible = expanded
     farmModeBtn.Visible = expanded
     walkSpeedBox.Visible = expanded
-    miscLabel.Visible = expanded
+    miscLabel.Visible = false
     infoLabel.Visible = expanded
     debugLabel.Visible = expanded
     sidebar.Visible = expanded
-    frame.Size = expanded and UDim2.new(0, 560, 0, 670) or UDim2.new(0, 560, 0, 44)
+    frame.Size = expanded and UDim2.new(0, 560, 0, 760) or UDim2.new(0, 560, 0, 44)
     minimizeBtn.Text = expanded and "-" or "+"
 end
 
@@ -1945,7 +1949,7 @@ local function updateStatus(force)
     autoBtn.BackgroundColor3 = autoFarm and palette.danger or palette.accent
     autoStandBtn.Text = autoStand and "Auto Stand: ON" or "Auto Stand: OFF"
     autoStandBtn.BackgroundColor3 = autoStand and palette.accent or Color3.fromRGB(72, 84, 110)
-    setSpeedBtn.Text = walkSpeedEnabled and "Set Speed: ON" or "Set Speed: OFF"
+    setSpeedBtn.Text = (walkSpeedEnabled and "Set Speed: ON" or "Set Speed: OFF") .. " | " .. tostring(customSpeed)
     setSpeedBtn.BackgroundColor3 = walkSpeedEnabled and palette.accent or palette.surface
     autoPrestigeBtn.Text = autoPrestige and "Auto Prestige: ON" or "Auto Prestige: OFF"
     autoPrestigeBtn.BackgroundColor3 = autoPrestige and palette.accent or palette.surface
